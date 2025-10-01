@@ -1,0 +1,24 @@
+
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    // For debugging a certain fuzz test, change the name of the test folder, ensure the debug binary
+    // is built, and the CORPUS folder as stated in args exists.
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug DLL Test",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/Debug/mylibtest.exe",
+            "args": [],
+            "stopAtEntry": true,
+            "cwd": "${workspaceFolder}/build/Debug",
+            "environment": [],
+            //"externalConsole": true,
+            "externalConsole": false
+        }
+    ]
+}
+
