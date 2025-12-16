@@ -4,7 +4,7 @@ Student: Ernst Schwaiger
 
 ## Lab Environment
 
-The host system is a Windows 11 notebook, the exercise was conducted in an Lubuntu 24.04 VirtualBox VM, with Docker 28.2.2 installed:
+The host system is a Windows 11 notebook, the exercise was conducted in an Lubuntu 24.04 Virtual Box VM, with Docker 28.2.2 installed:
 
 ```bash
 docker --version
@@ -19,7 +19,9 @@ which openssl
 OpenSSL 3.0.14 4 Jun 2024 (Library: OpenSSL 3.0.14 4 Jun 2024)
 ```
 
-## Acknowledgement
+`docker` has already been installed on the system, the user has been added to the `docker` group.
+
+## Acknowledgment
 
 Stefan Ohnewith provided me with the hint to use `ssl_conf_command` for restricting the TLS 1.3 ciphersuites. Thanks for that :-).
 
@@ -170,7 +172,7 @@ http {
 
 ## Launch Webserver, Display Page in Browser
 
-Running `make && make websrv` generates all dependencies and launches the server. In order to see the website in a browser, the cerificate `root_cert.pem` is installed upfront, then `https://www.acmecorp.at:44443/` can be accessed:
+Running `make && make websrv` generates all dependencies and launches the server. In order to see the website in a browser, the certificate `root_cert.pem` is installed upfront, then `https://www.acmecorp.at:44443/` can be accessed:
 
 ![webserver.png](webserver.png)
 
@@ -185,7 +187,7 @@ Running `make && make websrv` generates all dependencies and launches the server
 >   - Hinsichtlich (self-signed) Zertifikat: SAN, Trust, OCSP  
 >   - DNS CAA RR 
 
-testssl is installed by checking out the repo `https://github.com/testssl/testssl.sh` as suggested in their REAME:
+testssl is installed by checking out the repo `https://github.com/testssl/testssl.sh` as suggested in their README:
 
 ```bash
 git clone --depth 1 https://github.com/testssl/testssl.sh.git --branch 3.3dev
@@ -212,7 +214,7 @@ LUCKY13 (CVE-2013-0169), experimental     potentially VULNERABLE, uses cipher bl
 The issues concerning `OSCP` and `DNS CAA RR` can be ignored. In the first step, 
 - a list of cipher suites is selected, demanding the configured order from the server.
 - Strict Transport Security is required, security headers are added
-- TLS Session Tickets are deaktivated
+- TLS Session Tickets are deactivated
 
 The list of ciphersuites is taken from `https://wiki.mozilla.org/Security/Server_Side_TLS`, from the *Intermediate* configuration.
 
@@ -262,7 +264,7 @@ TLSv1.3 (server order)
  x1303   TLS_CHACHA20_POLY1305_SHA256      ECDH/MLKEM ChaCha20    256      TLS_CHACHA20_POLY1305_SHA256                      
 ```
 
-The weaker TLS 1.2 ciphersuites can be removed in `ssl_ciphers`, as of now, TLS 1.3 ciphersuites can only be configured using the `ssl_conf_command` directive in the nginx configuration file. By explicitly only providing the stronger ciphersuites, we get a score of `100`.
+The weaker TLS 1.2 ciphersuites can be removed in `ssl_ciphers`, as of now, TLS 1.3 ciphersuites can only be configured using the `ssl_conf_command` directive in the NGINX configuration file. By explicitly only providing the stronger ciphersuites, we get a score of `100`.
 
 ```
 # Ordered list of supported TLS 1.2 ciphers
