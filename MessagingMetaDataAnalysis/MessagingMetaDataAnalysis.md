@@ -17,7 +17,7 @@ Die Analyse der entschlüsselten Datenpakete erfolgte unter Windows 11 mithilfe 
 >WhatsApp  
 >Falls gewünscht ein anderes, nicht genanntes: in diesem Fall eine Email mit Begründung an Tobias Buchberger
 
-**WhatsApp** wird im folgenden Analysiert werden
+**WhatsApp** wird im folgenden analysiert werden
 
 #### Architektur
 >Welche Architektur ist umgesetzt (Centralized/Federated/Distributed)?
@@ -75,7 +75,9 @@ Während der Kopplung wurden weitere TLS Verbindungen aufgebaut:
 
 >Können Sie den initialen Schlüsselaustausch bzw. das übertragene Schlüsselmaterial identifizieren (z.B. Signal X3DH, _nicht_ TLS)?
 
-Die mit den WhatsApp Servern ausgetauschten Pakete beschränkten sich auf `QUIC` (Quick UDP Internet Connections) Pakete, `TCP` Handshakes, und `TLS` (Handshake und verschlüsselte Daten). Aus den veschlüsselten `TLS` Paketen konnte der Inhalt nicht abgeleitet werden.
+Die mit den WhatsApp Servern ausgetauschten Pakete beschränkten sich auf `QUIC` (Quick UDP Internet Connections) Pakete, `TCP` Handshakes, und `TLS` (Handshake und verschlüsselte Daten). Aus den veschlüsselten `TLS` Paketen konnte der Inhalt nicht abgeleitet werden, siehe zum Beispiel hier:
+
+![TlsClientHelloConnectAppData.png](TlsClientHelloConnectAppData.png)
 
 >Können Sie einzelne Nachrichten identifizieren?  
 >Können Sie unterschiedliche Nachrichten-Typen unterscheiden? (Text, Audio, Telefonat, Medien etc.)
@@ -172,7 +174,7 @@ File Upload:
 POST https://media-vie1-1.cdn.whatsapp.net/mms/document/JGkrcBNeQc7ixguwy96QX1w9iWqnM-QiI78SFHDMl9s=?auth=...
 ```
 
-Beim Versenden von Dateien finden sich im `POST` request und im response keine Meta-Daten, die auf den Typ der Datei schließen lassen. Die Größe der hochgeladednen Datei ist allerdings im `POST` Kommando sichtbar.
+Beim Versenden von Dateien finden sich im `POST` request und im response keine Meta-Daten, die auf den Typ der Datei schließen lassen. Die Größe der hochgeladenen Datei ist allerdings im `POST` Kommando sichtbar.
 
 >Scheinen interessante Informationen im Netzwerkverkehr auf?
 
@@ -180,7 +182,11 @@ Ich konnte aus den Paketen keine Informationen extrahieren, die nicht schon aus 
 
 >Welche Metadaten werden übertragen bzw. können Sie Metadaten aus dem aufgezeichneten Netzwerkverkehr entnehmen (z.B. DNS, X.509 Zertifikate)?
 
-DNS requests zu den WhatsApp Servern konnten gefunden werden, diese sind jedoch ohnehin nicht verschlüsselt. Aus den WhatsApp Paketen konnte darüber hinaus keine DNS Information extrahiert werden, auch keine X.509 Zertifikate oder Ähnliche Informationen konnten extrahiert werden.
+DNS requests zu den WhatsApp Servern konnten gefunden werden, diese sind jedoch ohnehin nicht verschlüsselt:
+
+![DNS.png](DNS.png)
+
+Aus den WhatsApp Paketen konnte darüber hinaus keine DNS Information extrahiert werden, auch keine X.509 Zertifikate oder ähnliche Informationen konnten extrahiert werden.
 
 >Werden long-term Secrets (Public Keys) als Plaintext übertragen? Oder gibt es Identity Hiding?
 
